@@ -1,104 +1,114 @@
 #include "optimization.h"
-#include <iostream>
-#include <cstdint>
+#include <set>
 #include <unordered_map>
 #include <vector>
-#include <string>
+#include <utility>
+#include <algorithm>
+#include <random>
 
-typedef long long ll;
+std::random_device rd;
+std::mt19937 g(rd());
 
-int n_old, n;
-std::vector<ll> segment_tree;
-std::vector<ll> pendings;
+int n, m;
+std::vector<std::vector<int>> graph;
 
-ll max(ll a, ll b) {
-    return std::max(a, b);
+std::vector<int> used;
+std::vector<int> covered;
+std::vector<int> matched_to;
+
+int phase = 0;
+
+int get_hash(int a, int b) {
+    return a * m + b;
 }
 
-ll min(ll a, ll b) {
-    return std::min(a, b);
+bool good(int a, int b) {
+    return (0 <= a && a < n && 0 <= b && b < m);
 }
 
-
-
-void ceil_n() {
-    int k = 1;
-    while (k < n_old) k <<= 1;
-    n = k;
-}
-
-void build() {
-    segment_tree.resize(2*n, INT64_MIN);
-    for (int i = 0; i < n_old; ++i) {
-        segment_tree[i + n] = readInt();
+bool have_increasing_way(int v) {
+    used[v] = phase;
+    // if (phase % 100 == 0) std::shuffle(graph[v].begin(), graph[v].end(), g);
+    for (const auto& u : graph[v]) {
+        if (matched_to[u] == -1 || (used[matched_to[u]] < phase && have_increasing_way(matched_to[u]))) {
+            if (matched_to[u] > -1 && covered[matched_to[u]] > -1) covered[matched_to[u]] -= 1;
+            matched_to[u] = v;
+            covered[v] += 1;
+            return true;
+        }
     }
-    for (int i = n - 1; i > 0; --i) {
-        segment_tree[i] = max(segment_tree[i << 1], segment_tree[(i << 1) | 1]);
-    }
-
-    pendings.resize(2*n, 0);
+    return false;
 }
-
-void push(int i) {
-    segment_tree[i] += pendings[i];
-
-    if (((i << 1) | 1) < (n << 1)){
-        pendings[i << 1] += pendings[i];
-        pendings[(i << 1) | 1] += pendings[i];
-    }
-    pendings[i] = 0;
-}
-
-void add(int i, int il, int ir, int l, int r, int value) {
-    if (max(il, l) >= min(ir, r)) return;
-    if (l <= il && ir <= r) {
-        pendings[i] += value;
-        return;
-    }
-    push(i);
-
-    int m = il + ((ir - il) >> 1);
-    add((i << 1), il, m, l, r, value);
-    add(((i << 1) | 1), m, ir, l, r, value);
-    segment_tree[i] = max(
-        segment_tree[i << 1] + pendings[i << 1], 
-        segment_tree[(i << 1) | 1] + pendings[(i << 1) | 1]
-    ) + pendings[i];
-}
-
-ll get_max(int i, int il, int ir, int l, int r) {
-    if (max(il, l) >= min(ir, r)) return INT64_MIN;
-    push(i);
-    if (l <= il && ir <= r) return segment_tree[i];
-
-    int m = il + ((ir - il) >> 1);
-    ll left_max = get_max((i << 1), il, m, l, r);
-    ll right_max = get_max(((i << 1) | 1), m, ir, l, r);
-    return max(left_max, right_max);
-}
-
 
 int main() {
-	n_old = readInt();
-    ceil_n();
-    int q = readInt();
-    build();
-    int l, r;
-    ll value;
-    for (int i = 0; i < q; ++i) {
-        char c = readChar();
-        readChar(); readChar();
-        l = readInt() - 1;
-        r = readInt() - 1;
-        if (c == 'a') {
-            value = readInt();
-            add(1, 0, n, l, r + 1, value);
-        } else if (c == 'm') {
-            ll res = get_max(1, 0, n, l, r + 1);
-            writeInt(res, '\n');
+    n = readInt(), m = readInt();
+    int a = readInt(), b = readInt();
+
+    std::vector<std::vector<int>> nodes_map (n, std::vector<int> (m));
+    int bad_nodes_count = 0;
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < m; ++j) {
+            char c = ' ';
+            while (c != '.' && c != '*') c = readChar();
+
+            if (c == '.') {
+                nodes_map[i][j] = 0;
+            } else {
+                nodes_map[i][j] = 1;
+                bad_nodes_count++;
+            }
+        }
+    }
+    if (a >= b*2) {
+        writeInt(b * bad_nodes_count, '\n');
+        return 0;
+    }
+
+    graph.resize(n * m, {});
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < m; ++j) {
+            if ((i + j) % 2 == 0 && nodes_map[i][j] == 1) {
+                int center = get_hash(i, j);
+
+                if (good(i - 1, j) && nodes_map[i - 1][j] == 1) {
+                    graph[center].push_back(get_hash(i - 1, j));
+                } 
+                if (good(i + 1, j) && nodes_map[i + 1][j] == 1) {
+                    graph[center].push_back(get_hash(i + 1, j));
+                }
+                if (good(i, j - 1) && nodes_map[i][j - 1] == 1) {
+                    graph[center].push_back(get_hash(i, j - 1));
+                }
+                if (good(i, j + 1) && nodes_map[i][j + 1] == 1) {
+                    graph[center].push_back(get_hash(i, j + 1));
+                }
+            }
         }
     }
 
+    used.resize(n * m, 0);
+    covered.resize(n * m, 0);
+    matched_to.resize(n * m, -1);
+    for (int i = 0; i < n * m; ++i) used[i] = covered[i] = 0;
+    for (int i = 0; i < n * m; ++i) matched_to[i] = -1;
 
+    int matchings_count = 0;
+    bool run = true;
+    while (run) {
+        run = false;
+        phase++;
+
+        for (int i = 0; i < n * m; ++i) {
+            if (covered[i] == 0 && used[i] < phase && have_increasing_way(i)) {
+                run = true;
+                matchings_count++;
+            }
+        }
+    }
+
+    int res_cost = matchings_count * a + (bad_nodes_count - 2 * matchings_count) * b;
+
+    writeInt(res_cost, '\n');
     return 0;
 }

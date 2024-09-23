@@ -1,113 +1,116 @@
-// #define FAST_ALLOCATOR_MEMORY
 #include "optimization.h"
-#include <iostream>
-#include <cstdint>
+#include <set>
 #include <unordered_map>
 #include <vector>
-#include <string>
+#include <utility>
 
-const int n = 1'048'576;
-// const int n = 32;
-const int bias = n >> 1;
+std::vector<std::set<int>> graph;
+std::vector<int> used;
+std::vector<int> covered;
+std::vector<int> matched_to;
+int phase;
 
-struct node {
-	node(int l_ = 0, int r_ = n) : l(l_), r(r_) {
-		if (l < r - 1) {
-			// int m = l + ((r - l) >> 1);
-			// l_son = new node(l, m);
-			// r_son = new node(m, r);
-		}
-	}
+std::vector<int> visited_a;
+std::vector<int> visited_b;
 
-	void push() {
-		if (l_son && color >= 0) {
-			if (color) {
-				int m = l + ((r - l) >> 1);
-				l_son->black_lb = black_lb;
-				l_son->black_rb = m;
-				r_son->black_lb = m;
-				r_son->black_rb = black_rb;
-				l_son->sum = r_son->sum = sum >> 1;
-			} else {
-				l_son->black_lb = r_son->black_lb = INT32_MAX;
-				l_son->black_rb = r_son->black_rb = INT32_MIN;
-				l_son->sum = r_son->sum = 0;
-			}
-			l_son->black_count = r_son->black_count = black_count;
-			l_son->color = r_son->color = color;
-		}
-		color = -1;
-	}
 
-	void colorize(int ql, int qr, int new_color) {
-		if (l >= qr || r <= ql) return;
-		else if (ql <= l && r <= qr) {
-			color = new_color;
-			black_count = new_color;
-			if (color) {
-				black_lb = l;
-				black_rb = r;
-			} else {
-				black_lb = INT32_MAX;
-				black_rb = INT32_MIN;
-			}
-			sum = (r - l) * new_color;
-			return;
-		}
+bool have_new_matching(int v) {
+    used[v] = phase;
+    for (auto u : graph[v]) {
+        if (matched_to[u] == -1 || (used[matched_to[u]] < phase && have_new_matching(matched_to[u]))) {
+            if (matched_to[u] > -1) covered[matched_to[u]] -= 1;
+            matched_to[u] = v;
+            covered[v] = 1;
+            return true;
+        }
+    }
+    return false;
+}
 
-		if (!l_son) {
-			int m = l + ((r - l) >> 1);
-			l_son = new node(l, m);
-			r_son = new node(m, r);
-		}
-		push();
-		l_son->colorize(ql, qr, new_color);
-		r_son->colorize(ql, qr, new_color);
-
-		black_lb = std::min(l_son->black_lb, r_son->black_lb);
-		black_rb = std::max(l_son->black_rb, r_son->black_rb);
-		black_count = l_son->black_count + r_son->black_count - 
-			(l_son->black_rb == r_son->black_lb);
-		if (black_count == 0) {
-			color = 0;
-			sum = 0;
-		} else if (black_count == 1 && black_lb == l && black_rb == r) {
-			color = 1;
-			sum = r - l;
-		} else {
-			sum = l_son->sum + r_son->sum;
-		}
-	}
-
-	int get_sum() {
-		if (color >= 0) {
-			return (r - l) * color;
-		}
-		return l_son->get_sum() + r_son->get_sum();
-	}
-
-	int l, r;
-	node *l_son = nullptr, *r_son = nullptr;
-	int color = 0, black_lb = INT32_MAX, black_rb = INT32_MIN, black_count = 0;
-	int sum = 0;
-};
+void do_walk(int v) {
+    visited_a[v] = 1;
+    for (auto u : graph[v]) {
+        if (!visited_a[matched_to[u]]) {
+            visited_b[u] = 1;
+            do_walk(matched_to[u]);
+        }
+    }
+}
 
 int main() {
-	int m = readInt();
-	int x, l;
-	node line(0, n);
-	for (int i = 0; i < m; ++i) {
-		char color = readChar();
-		x = readInt(), l = readInt();
-		x += bias;
+    int n_tests = readInt();
+    while (n_tests--) {
+        int n = readInt(), m = readInt();
+        graph.resize(n, {});
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < m; ++j) {
+                graph[i].insert(j);
+            }
+            int inverted_edge = readInt();
+            while (inverted_edge > 0) {
+                graph[i].erase(inverted_edge - 1);
+                inverted_edge = readInt();
+            }
+        }
 
-		if (color == 'W') line.colorize(x, x + l, 0);
-		else if (color == 'B') line.colorize(x, x + l, 1);
-		
-		writeInt(line.black_count, ' ');
-		writeInt(line.sum, '\n');
-	}
+        used.resize(n, 0);
+        covered.resize(n, 0);
+        matched_to.resize(m, -1);
+        phase = 0;
 
+        bool run = true;
+        while (run) {
+            run = false;
+            phase++;
 
+            for (int i = 0; i < n; ++i) {
+                if (covered[i] == 0 && have_new_matching(i)) run = true;
+            }
+        }
+
+        phase++;
+        visited_a.resize(n, 0);
+        visited_b.resize(m, 0);
+
+        for (int i = 0; i < n; ++i) {
+            if (covered[i] == 0 && !visited_a[i]) {
+                do_walk(i);
+            }
+        }
+
+        int visited_a_count = 0, visited_b_count = 0;
+        for (auto item : visited_a) visited_a_count += item;
+        for (auto item : visited_b) visited_b_count += (1 - item);
+
+        int total_count = visited_a_count * visited_b_count == 0 ? 0 : visited_a_count + visited_b_count;
+
+        if (total_count == 0) {
+            visited_a_count = visited_b_count = 0;
+        }
+
+        writeInt(total_count, '\n');
+        writeInt(visited_a_count, ' ');
+        writeInt(visited_b_count, '\n');
+        if (total_count == 0) return 0;
+        for (int i = 0; i < n; ++i) {
+            if (visited_a[i] > 0) writeInt(i + 1, ' ');
+        }
+        writeChar('\n');
+        for (int j = 0; j < m; ++j) {
+            if (visited_b[j] == 0) writeInt(j + 1, ' ');
+        }
+        writeChar('\n');
+        writeChar('\n');
+
+        // CLEARING
+        graph.clear();
+        used.clear();
+        covered.clear();
+        matched_to.clear();
+
+        visited_a.clear();
+        visited_b.clear();
+
+    }
     return 0;
 }

@@ -8,10 +8,7 @@
 
 
 int main() {
-	int i;
-    while (i = readInt()) {
-        writeInt(i, ' ');
-    }
+	
 
 
     return 0;

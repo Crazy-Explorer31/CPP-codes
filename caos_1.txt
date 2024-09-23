@@ -1,0 +1,13 @@
+reaidi64 -- to rax
+writei64 -- from rdi
+
+only summator
+
+1        = 0000 0001
+-1       = 1111 1111
+1 + (-1) = 0000 0000
+
+-a = ~a + 1
+
+
+

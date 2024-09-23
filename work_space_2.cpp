@@ -1,58 +1,65 @@
 #include "optimization.h"
 #include <iostream>
 #include <cstdint>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <string>
+#include <set>
 
-const int n = 32'000 + 1;
-std::vector<int> segment_tree(2 * n, 0);
+std::vector<std::vector<int>> graph;
+std::vector<int> used;
+std::vector<int> matched_to;
+std::vector<int> covered;
 
-void reset() {
-    std::fill(segment_tree.begin(), segment_tree.end(), 0);
+bool have_new_matching(int v) {
+    used[v] = 1;
+    for (auto u : graph[v]) {
+        if (matched_to[u] == -1 ||
+            used[matched_to[u]] == 0 && have_new_matching(matched_to[u])) {
+                if (matched_to[u] > -1) covered[matched_to[u]] -= 1;
+                matched_to[u] = v;
+                covered[v] += 1;
+                return true;
+            }
+    }
+    return false;
 }
-
-void change(int i, int value) {
-	segment_tree[i += n] += value;
-	while (i > 1) {
-		i >>= 1;
-		segment_tree[i] = segment_tree[i << 1] + segment_tree[(i << 1) | 1];
-	}
-}
-
-int get_sum(int r, int l = 0) {
-	int res = 0;
-	for (l += n, r += n; l <= r; l >>= 1, r >>= 1) {
-		if (l & 1) res = res + segment_tree[l++];
-		if (!(r & 1)) res = res + segment_tree[r--];
-	}
-	return res;
-}
-
 
 int main() {
-	int m;
-    bool first = true;
-    int x, y;
-    std::vector<int> ans;
-    while (m = readInt()) {
-        if (!first) reset();
-        ans.resize(m, 0);
-        std::fill(ans.begin(), ans.end(), 0);
-        for (int i = 0; i < m; ++i) {
-            x = readInt(), y = readInt();
-            int res = get_sum(x);
-            ans[res] += 1;
-            
-            change(x, 1);
-        }
-        for (auto& item : ans) {
-            std::cout << item << '\n';
-        }
+	int n = readInt(), m = readInt();
+    graph.resize(n, {});
+    used.resize(n, 0);
+    matched_to.resize(m, -1);
+    covered.resize(n, 0);
 
-        first = false;
+    for (int i = 0; i < n; ++i) {
+        int b_neighbor = readInt();
+        while (b_neighbor != 0) {
+            graph[i].push_back(b_neighbor - 1);
+            b_neighbor = readInt();
+        }
     }
 
+    bool run = true;
+    while (run) {
+        run = false;
+        for (auto& item : used) item = 0;
 
+        for (int i = 0; i < n; ++i) {
+            if (covered[i] == 0 && have_new_matching(i)) run = true;
+        }
+    }
+
+    int matchings_count = 0;
+    for (auto item : matched_to) {
+        if (item != -1) matchings_count++;
+    }
+    writeInt(matchings_count, '\n');
+    for (int i = 0; i < m; ++i) {
+        if (matched_to[i] != -1) {
+            writeInt(matched_to[i] + 1, ' ');
+            writeInt(i + 1, '\n');
+        }
+    }
     return 0;
 }
