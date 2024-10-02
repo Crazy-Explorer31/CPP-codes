@@ -1,0 +1,26 @@
+find <directory, in which file will be searched>
+-name (for searching by name of file) "<file name>(globs can be used)"
+-type <f (file)/ d (directory)/ l (link)>
+-empty (for searching only empty files)
+-size +-<size><k/M> (searching by file size)
+-perm <number in octal (371, 253)>
+-exec <command with options (ls -l)> {} \;
+(2>/dev/null - for redirecting stderror to null file)
+
+Using xargs:
+find / -name kernel -type d | xargs ls -l # xargs gives stdin of command as a arguments
+
+Manage with packages:
+
+sudo dpkg -i package_name.deb # install package from package_name.deb
+sudo dpkg -r package_name.deb # unisntall package installed from package_name.deb
+
+flatpak list --columns=name,ref,size # show all packages installed from flathub
+flatpak install flathub io.github.alainm23.planify # install package
+flatpak --system uninstall <package_ref> # uninstall package with <package_ref> reference (example: flatpak --system uninstall io.github.alainm23.planify)
+
+snap list --all # show all packages installed from snap
+
+Change lockscreen background:
+
+sudo ./ubuntu-gdm-set-background --image '/home/stepan/Загрузки/wallpaperflare.com_wallpaper (13).jpg' # must run from ~/Загрузки/ubuntu-gdm-set-background
