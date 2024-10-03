@@ -1,121 +1,124 @@
 #include "optimization.h"
-#include "stdio.h"
-#include <iostream>
 #include <cstdint>
-#include <unordered_map>
+#include <set>
 #include <vector>
 #include <string>
 
-struct order {
-order() {}
-void assign_order(int hh_, int mm_, int a_, int b_, int c_, int d_) {
-    hh = hh_, mm = mm_, a = a_, b = b_, c = c_, d = d_;
-}
+using ll = long long;
+using ull = unsigned long long;
 
-int hh, mm, a, b, c, d;
+struct Edge {
+Edge() {}
+Edge(int from, int to, int flow, int capacity, int next_edge) : 
+    from(from), to(to), flow(flow), capacity(capacity), next_edge(next_edge) {}
+
+bool is_available(ll weight) { return flow + weight <= capacity; }
+bool is_positive() { return flow > 0; }
+
+int from, to;
+ll flow, capacity;
+int next_edge;
 };
 
-bool can_be_after(const order& fst, const order& snd) {
-    int time_had = 60 * (snd.hh - fst.hh) + (snd.mm - fst.mm);
-    // if (time_had <= 0) return false;
+struct Max_Flow_Finder {
+Max_Flow_Finder() {
+    n = readInt(), m = readInt();
+    s = 0, t = n - 1;
+    edges.reserve(2 * m);
+    heads.resize(n, -1);
+    for (int i = 0; i < m; ++i) {
+        int from = readInt(), to = readInt(), capacity = readInt();
+        from--, to--;
 
-    int time_to_complete = abs(fst.a - fst.c) + abs(fst.b - fst.d);
-    int time_to_arrive = abs(fst.c - snd.a) + abs(fst.d - snd.b);
-    int time = time_to_complete + time_to_arrive;
-
-    if (time_had - time <= 0) return false;
-    return true;
-}
-
-struct solution {
-solution() {
-    n = readInt();
-    std::vector<order> orders(n);
-    for (int i = 0; i < n; ++i) {
-        int hh = readInt();
-        // readChar();
-        int mm = readInt(), a = readInt(), b = readInt(), c = readInt(), d = readInt();
-        // scanf("%d\:%d %d %d %d %d", &hh, &mm, &a, &b, &c, &d);
-        orders[i].assign_order(hh, mm, a, b, c, d);
-    }
-    graph.resize(n, {});
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            if (can_be_after(orders[i], orders[j])) {
-                graph[i].push_back(j);
-            }
-        }
+        edges.push_back(Edge(from, to, 0, capacity, heads[from]));
+        edges.push_back(Edge(to, from, 0, 0, heads[to]));
+        heads[from] = 2 * i;
+        heads[to] = 2 * i + 1;
     }
     used.resize(n, 0);
-    covered.resize(n, 0);
-    matched_to.resize(n, -1);
-    matched_from.resize(n, -1);
-    phase = 0;
-    res = n;
 }
 
-bool have_increasing_way(int v) {
+bool push_flow(int v, ll trial_flow) {
     used[v] = phase;
-    for (const auto& u : graph[v]) {
-        if (matched_to[u] == -1 || (used[matched_to[u]] < phase && have_increasing_way(matched_to[u]))) {
-            if (matched_to[u] > -1 && covered[matched_to[u]] > -1) covered[matched_to[u]] -= 1;
-            matched_to[u] = v;
-            matched_from[v] = u;
-            covered[v] += 1;
-            return true;
-        }
-    }
-    return false;
-}
+    for (int i = heads[v]; i != -1; i = edges[i].next_edge) {
+        Edge& edge = edges[i];
+        int to = edges[i].to;
 
-void find_matching() {
-    bool run = true;
-    while (run) {
-        run = false;
-        phase++;
-        for (int i = 0; i < n; ++i) {
-            if (used[i] < phase && covered[i] == 0 && have_increasing_way(i)) {
-                run = true;
-                res--;
+        if (used[to] < phase && edge.is_available(trial_flow)) {
+            if (to == t || push_flow(to, trial_flow)) {
+                edge.flow += trial_flow;
+                edges[i ^ 1].flow -= trial_flow;
+                // res_paths.back().push_back((i >> 1) + 1); // too early
+                return 1;
             }
         }
     }
+    return 0;
 }
 
-void mark_way(int v) {
+int pop_flow(int v, int cur_min = INT32_MAX) {
     used[v] = phase;
-    if (used[matched_from[v]] < phase && matched_from[v] != -1) {
-        mark_way(matched_from[v]);
-        res--;
-    }
-} 
+    int new_min;
+    for (int i = heads[v]; i != -1; i = edges[i].next_edge) {
+        int next_min = std::min(cur_min, (int)(edges[i].flow));
+        if (next_min <= 0) continue;
+        if (edges[i].flow > 0 && used[edges[i].to] < phase && 
+            (edges[i].to == t || (new_min = pop_flow(edges[i].to, next_min)) > 0)) {
+            
+            if (edges[i].to == t) {
+                new_min = next_min;
+            }
 
-int get_ways_count() {
-    phase++;
-    for (int i = 0; i < n; ++i) {
-        if (used[i] < phase) {
-            mark_way(i);
+            edges[i].flow -= new_min;
+            
+            res_paths.back().push_back((i >> 1) + 1);
+            return new_min;
         }
     }
-    return res;
+    return 0;
 }
 
-int n;
-std::vector<std::vector<int>> graph;
+void increasing_flow() {
+    ll trial_flow = (1 << 30);
+    for (; trial_flow > 0; trial_flow = (trial_flow >> 1)) {
+        while ((phase++, push_flow(s, trial_flow))) {}
+    }
 
+    int got_flow = 0;
+    (phase++, res_paths.push_back({}));
+    while ((got_flow = pop_flow(s))) {
+        res_flows.push_back(got_flow);
+        (phase++, res_paths.push_back({}));
+    }
+    res_paths.pop_back();
+}
+
+void print_results() {
+    writeInt(res_paths.size(), '\n');
+    for (int i = 0; i < res_paths.size(); ++i) {
+        writeInt(res_flows[i], ' ');
+        writeInt(res_paths[i].size(), ' ');
+        for (int j = res_paths[i].size() - 1; j >= 0; --j) {
+            writeInt(res_paths[i][j], ' ');
+        }
+        writeChar('\n');
+    }
+}
+
+int n, m, s, t;
+std::vector<Edge> edges;
+std::vector<int> heads;
 std::vector<int> used;
-std::vector<int> covered;
-std::vector<int> matched_to;
-std::vector<int> matched_from;
-int phase;
-int res;
+int phase = 0;
+std::vector<int> res_flows;
+std::vector<std::vector<int>> res_paths;
 };
 
+
+
 int main() {
-	solution s;
-    s.find_matching();
-    // int res = s.get_ways_count();
-    int res = s.res;
-    writeInt(res, '\n');
+	Max_Flow_Finder solution;
+    solution.increasing_flow();
+    solution.print_results();
     return 0;
 }

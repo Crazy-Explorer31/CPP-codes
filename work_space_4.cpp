@@ -1,116 +1,123 @@
 #include "optimization.h"
+#include <iostream>
+#include <cstdint>
 #include <set>
-#include <unordered_map>
 #include <vector>
-#include <utility>
+#include <string>
 
-std::vector<std::set<int>> graph;
-std::vector<int> used;
-std::vector<int> covered;
-std::vector<int> matched_to;
-int phase;
+struct MinStack {
+void push(int a) {
+    data.push_back(a);
+    mins.push_back((mins.empty() || mins.back() >= a) ? (a) : (mins.back()));
+}
 
-std::vector<int> visited_a;
-std::vector<int> visited_b;
+void pop() {
+    data.pop_back();
+    mins.pop_back();
+}
 
+int get_min() { return mins.back(); }
 
-bool have_new_matching(int v) {
+void clear() {
+    data.clear();
+    mins.clear();
+}
+
+std::vector<int> data;
+std::vector<int> mins;
+};
+
+struct Edge {
+Edge() {}
+Edge(int from, int to, int flow, int capacity, int next_edge) : 
+    from(from), to(to), flow(flow), capacity(capacity), next_edge(next_edge) {}
+
+bool is_available() { return flow < capacity; }
+bool is_positive() { return flow > 0; }
+
+int from, to, flow, capacity;
+int next_edge;
+};
+
+struct Max_Flow_Finder {
+Max_Flow_Finder() {
+    n = readInt(), m = readInt();
+    s = 0, t = n - 1;
+    edges.reserve(4 * m);
+    heads.resize(n, -1);
+    for (int i = 0; i < m; ++i) {
+        int from = readInt(), to = readInt(), capacity = readInt();
+        from--, to--;
+
+        edges.push_back(Edge(from, to, 0, capacity, heads[from]));
+        edges.push_back(Edge(to, from, 0, 0, heads[to]));
+        heads[from] = 4 * i;
+        heads[to] = 4 * i + 1;
+        
+        edges.push_back(Edge(to, from, 0, capacity, heads[to]));
+        edges.push_back(Edge(from, to, 0, 0, heads[from]));
+        heads[to] = 4 * i + 2;
+        heads[from] = 4 * i + 3;
+    }
+    used.resize(n, 0);
+}
+
+int push_flow(int v, int max_flow = INT32_MAX) {
     used[v] = phase;
-    for (auto u : graph[v]) {
-        if (matched_to[u] == -1 || (used[matched_to[u]] < phase && have_new_matching(matched_to[u]))) {
-            if (matched_to[u] > -1) covered[matched_to[u]] -= 1;
-            matched_to[u] = v;
-            covered[v] = 1;
-            return true;
+    for (int i = heads[v]; i != -1; i = edges[i].next_edge) {
+        Edge& edge = edges[i];
+        int to = edges[i].to;
+        int pushed_flow = -1;
+
+        if (used[to] < phase && edge.is_available()) {
+            if (to == t || 
+                (pushed_flow = push_flow(to, std::min(edge.capacity - edge.flow, max_flow))) > 0) {
+                if (to == t) pushed_flow = std::min(edge.capacity - edge.flow, max_flow);
+                if (pushed_flow > 0) {
+                    edge.flow += pushed_flow;
+                    edges[i ^ 1].flow -= pushed_flow;
+                    return pushed_flow;
+                }
+            }
         }
     }
-    return false;
+    return 0;
 }
 
-void do_walk(int v) {
-    visited_a[v] = 1;
-    for (auto u : graph[v]) {
-        if (!visited_a[matched_to[u]]) {
-            visited_b[u] = 1;
-            do_walk(matched_to[u]);
-        }
+void increasing_flow() {
+    int delta_flow = 0;
+    phase++;
+    while ((delta_flow = push_flow(s)) > 0) {
+        total_flow += delta_flow;
+        delta_flow = 0;
+        phase++;
+        max_flows.clear();
     }
 }
+
+void print_results() {
+    writeDouble(total_flow, 3);
+    writeChar('\n');
+    for (int i = 0; i < m; ++i) {
+        writeDouble(edges[4 * i].flow - edges[4 * i + 2].flow, 3);
+        writeChar('\n');
+    }
+}
+
+int n, m, s, t;
+std::vector<Edge> edges;
+std::vector<int> heads;
+std::vector<int> used;
+MinStack max_flows;
+int phase = 0;
+int total_flow = 0;
+};
+
+
 
 int main() {
-    int n_tests = readInt();
-    while (n_tests--) {
-        int n = readInt(), m = readInt();
-        graph.resize(n, {});
-        for (int i = 0; i < n; ++i) {
-            for (int j = 0; j < m; ++j) {
-                graph[i].insert(j);
-            }
-            int inverted_edge = readInt();
-            while (inverted_edge > 0) {
-                graph[i].erase(inverted_edge - 1);
-                inverted_edge = readInt();
-            }
-        }
-
-        used.resize(n, 0);
-        covered.resize(n, 0);
-        matched_to.resize(m, -1);
-        phase = 0;
-
-        bool run = true;
-        while (run) {
-            run = false;
-            phase++;
-
-            for (int i = 0; i < n; ++i) {
-                if (covered[i] == 0 && have_new_matching(i)) run = true;
-            }
-        }
-
-        phase++;
-        visited_a.resize(n, 0);
-        visited_b.resize(m, 0);
-
-        for (int i = 0; i < n; ++i) {
-            if (covered[i] == 0 && !visited_a[i]) {
-                do_walk(i);
-            }
-        }
-
-        int visited_a_count = 0, visited_b_count = 0;
-        for (auto item : visited_a) visited_a_count += item;
-        for (auto item : visited_b) visited_b_count += (1 - item);
-
-        int total_count = visited_a_count * visited_b_count == 0 ? 0 : visited_a_count + visited_b_count;
-
-        if (total_count == 0) {
-            visited_a_count = visited_b_count = 0;
-        }
-
-        writeInt(total_count, '\n');
-        writeInt(visited_a_count, ' ');
-        writeInt(visited_b_count, '\n');
-        if (total_count == 0) return 0;
-        for (int i = 0; i < n; ++i) {
-            if (visited_a[i] > 0) writeInt(i + 1, ' ');
-        }
-        writeChar('\n');
-        for (int j = 0; j < m; ++j) {
-            if (visited_b[j] == 0) writeInt(j + 1, ' ');
-        }
-        writeChar('\n');
-        writeChar('\n');
-
-        // CLEARING
-        graph.clear();
-        used.clear();
-        covered.clear();
-        matched_to.clear();
-
-        visited_a.clear();
-        visited_b.clear();
-
-    }
+	Max_Flow_Finder solution;
+    solution.increasing_flow();
+    solution.print_results();
     return 0;
 }
